@@ -1,8 +1,16 @@
+import org.gradle.kotlin.dsl.execution.ProgramText.Companion.from
 import org.gradle.nativeplatform.platform.internal.NativePlatformInternal
 import org.gradle.nativeplatform.toolchain.internal.NativeToolChainInternal
 import org.gradle.nativeplatform.toolchain.internal.ToolType
 
 version = "1.0.0.1"
+ext {
+    set("productName", "IntelliJ Platform")
+    set("companyName", "JetBrains s.r.o.")
+    set("description", "Part of elevator/launcher UAC IntelliJ kit. ")
+    set("copyright", "Copyright (C) 2017 JetBrains s.r.o.")
+    set("iconPath", "..\\\\jb.ico")
+}
 
 tasks.register<Copy>("install") {
     group = "build"
@@ -79,12 +87,31 @@ subprojects {
             }
 
             linkTask.get().apply {
-                when(this@whenElementFinalized.toolChain) {
+                when(binary.toolChain) {
                     is GccCompatibleToolChain -> linkerArgs.set(listOf("-nodefaultlibs", "-lc"))
                 }
             }
 
             // https://github.com/gradle/native-samples/blob/49caeb5c31ba0b412239eb77564755c0eabeab82/cpp/windows-resources/build.gradle
+            val processResources = project.tasks.register<Sync>("processResources${name.capitalize()}") {
+                from(rootProject.fileTree(srcDir) { include("**/*.rc") })
+                into(File(buildDir, "processed-windows-resources"))
+
+                filteringCharset = "UTF-16LE"
+                filter(
+                    org.apache.tools.ant.filters.ReplaceTokens::class,
+                    "tokens" to java.util.Hashtable(mapOf(
+                        "VERSION" to version.toString(),
+                        "COMMA_VERSION" to version.toString().replace('.', ','),
+                        "PRODUCT_NAME" to rootProject.ext["productName"].toString(),
+                        "COMPANY_NAME" to rootProject.ext["companyName"].toString(),
+                        "DESCRIPTION" to rootProject.ext["description"].toString(),
+                        "COPYRIGHT" to rootProject.ext["copyright"].toString(),
+                        "ICON_PATH" to rootProject.ext["iconPath"].toString(),
+                    ))
+                )
+            }
+
             val compileResources = project.tasks.register<WindowsResourceCompile>("compileResources${name.capitalize()}") {
                 targetPlatform.set(binary.compileTask.map { it.targetPlatform.get() })
                 toolChain.set(binary.toolChain)
@@ -97,7 +124,7 @@ subprojects {
                     .map { it.select(targetPlatform.get() as NativePlatformInternal) }
                     .map { it.getSystemLibraries(ToolType.WINDOW_RESOURCES_COMPILER).includeDirs })
 
-                source.from(rootProject.fileTree(srcDir) { include("**/*.rc") })
+                source.from(processResources.map { fileTree(it.destinationDir) })
                 outputDir = File(project.buildDir, "windows-resources/$name")
 
                 compilerArgs.addAll(toolChain.map { toolChain ->
