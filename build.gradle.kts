@@ -25,10 +25,13 @@ tasks.register<Copy>("install") {
 }
 
 subprojects {
+    version = rootProject.version
+
+    if(project.name != "elevator" && project.name != "launcher")
+        return@subprojects;
+
     apply(plugin = "cpp-application")
     apply(plugin = "windows-resources")
-
-    version = rootProject.version
 
     val srcDir = when(project.name) {
         "elevator" -> rootProject.file("elevator")
